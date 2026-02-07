@@ -9,3 +9,11 @@ with st.expander('Data'):
   st.write('**Raw data**')
   df = pd.read_csv('https://raw.githubusercontent.com/RdwinL/Ed_Machine_learning/refs/heads/master/crop_yield_data.csv')
   df
+
+  st.write('**X**')
+  X =df.drop('crop_yield', axis=1)
+  X
+
+  st.write('**y**')
+  y = df["crop_yield"]
+  y
