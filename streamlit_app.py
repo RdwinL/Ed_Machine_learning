@@ -23,12 +23,12 @@ with st.expander('y_data'):
   y
 st.subheader("Initial Data Analysis")
 
-# Target distribution
+st.write('Target distribution')
 fig, ax = plt.subplots()
 sns.histplot(df["crop_yield"], kde=True, ax=ax)
 st.pyplot(fig)
 
-# Correlation heatmap
+st.write('Correlation heatmap')
 fig, ax = plt.subplots(figsize=(8,6))
 sns.heatmap(df.corr(), annot=True, cmap="coolwarm", ax=ax)
 st.pyplot(fig)
