@@ -56,8 +56,19 @@ with st.expander('y_data'):
   st.write('**y**')
   y = df["crop_yield"]
   y
-st.subheader("Initial Data Analysis")
+st.header("Initial Data Visualization")
+st.subheader("Variable Distributions")
 
+with st.expander("View Histograms for All Variables"):
+
+    # Select numeric columns
+    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
+
+    for col in numeric_cols:
+        st.subheader(f"Histogram: {col}")
+        fig, ax = plt.subplots()
+        sns.histplot(df[col], bins=30, kde=True, ax=ax)
+        st.pyplot(fig)
 st.write('Yield distribution')
 fig, ax = plt.subplots()
 sns.histplot(df["crop_yield"], kde=True, ax=ax)
