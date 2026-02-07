@@ -16,14 +16,48 @@ with st.expander('X_Data'):
   st.write('**X**')
   X =df.drop('crop_yield', axis=1)
   X
-  
+st.header("Data Overview")
+
+# Expander
+with st.expander("View Dataset Information", expanded=False):
+
+    st.subheader("Dataset Shape")
+    st.write(f"Rows: {df.shape[0]}")
+    st.write(f"Columns: {df.shape[1]}")
+
+    st.markdown("---")
+
+    st.subheader("First 5 Rows (Head)")
+    st.dataframe(df.head())
+
+    st.markdown("---")
+
+    st.subheader("Last 5 Rows (Tail)")
+    st.dataframe(df.tail())
+
+    st.markdown("---")
+
+    st.subheader("Data Types")
+    st.write(df.dtypes)
+
+    st.markdown("---")
+
+    st.subheader("Missing Values Count")
+    missing = df.isnull().sum()
+    st.dataframe(missing)
+
+    st.markdown("---")
+
+    st.subheader("Summary Statistics")
+    st.dataframe(df.describe())
+
 with st.expander('y_data'):
   st.write('**y**')
   y = df["crop_yield"]
   y
 st.subheader("Initial Data Analysis")
 
-st.write('Target distribution')
+st.write('Yield distribution')
 fig, ax = plt.subplots()
 sns.histplot(df["crop_yield"], kde=True, ax=ax)
 st.pyplot(fig)
