@@ -70,7 +70,10 @@ with st.expander("View Histograms for All Variables"):
         sns.histplot(df[col], bins=30, kde=True, ax=ax)
         st.pyplot(fig)
       
-        st.subheader('Correlation heatmap')
-        fig, ax = plt.subplots(figsize=(8,6))
-        sns.heatmap(df.corr(), annot=True, cmap="coolwarm", ax=ax)
-        st.pyplot(fig)
+with st.expander("Correlation Heatmap"):
+
+    st.subheader("Correlation Matrix")
+
+    fig, ax = plt.subplots(figsize=(8,6))
+    sns.heatmap(df[numeric_cols].corr(), annot=True, cmap="coolwarm", ax=ax)
+    st.pyplot(fig)
