@@ -11,7 +11,8 @@ with st.expander('Raw Data'):
   st.write('**Raw data**')
   df = pd.read_csv('https://raw.githubusercontent.com/RdwinL/Ed_Machine_learning/refs/heads/master/crop_yield_data.csv')
   df
-
+  
+st.header("Data Overview")
 # Expander
 with st.expander("View Dataset Information", expanded=False):
 
@@ -49,7 +50,7 @@ with st.expander('X_Data'):
   st.write('**X**')
   X =df.drop('crop_yield', axis=1)
   X
-st.header("Data Overview")
+
 
 with st.expander('y_data'):
   st.write('**y**')
