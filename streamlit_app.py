@@ -1,493 +1,533 @@
 import streamlit as st
 import pandas as pd
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.tree import DecisionTreeRegressor
+from sklearn.metrics import mean_squared_error, r2_score, mean_absolute_error
+import pickle
+import io
 
-st.title('Machine Learning App')
+# Page configuration
+st.set_page_config(page_title="Crop Yield Predictor", layout="wide")
 
-st.info('Machine learning model For Crop Yield Prediction')
-DEFAULT_DATA_PATH = "crop_yield_data.csv"
-DEFAULT_TARGET = "crop_yield"
+st.title('🌾 Machine Learning App')
+st.info('Machine learning model for Crop Yield Prediction')
+
+# Load data
 DATA_URL = "https://raw.githubusercontent.com/RdwinL/Ed_Machine_learning/refs/heads/master/crop_yield_data.csv"
-with st.expander('Raw Data'):
-  st.write('**Raw data**')
-  df = pd.read_csv('https://raw.githubusercontent.com/RdwinL/Ed_Machine_learning/refs/heads/master/crop_yield_data.csv')
-  df
-  
-st.header("Data Overview")
-# Expander
-with st.expander("View Dataset Information", expanded=False):
 
-    st.subheader("Dataset Shape")
-    st.write(f"Rows: {df.shape[0]}")
-    st.write(f"Columns: {df.shape[1]}")
+@st.cache_data
+def load_data():
+    df = pd.read_csv(DATA_URL)
+    return df
 
-    st.markdown("---")
+df = load_data()
 
-    st.subheader("First 5 Rows (Head)")
-    st.dataframe(df.head())
+# Sidebar for navigation
+st.sidebar.title("Navigation")
+page = st.sidebar.radio("Go to", [
+    "Data Overview",
+    "Data Visualization", 
+    "Model Training",
+    "Model Evaluation",
+    "Make Predictions"
+])
 
-    st.markdown("---")
+# ==================== DATA OVERVIEW PAGE ====================
+if page == "Data Overview":
+    st.header("📊 Data Overview")
+    
+    with st.expander('Raw Data', expanded=True):
+        st.write('**Raw data**')
+        st.dataframe(df, use_container_width=True)
+    
+    # Dataset Information
+    with st.expander("View Dataset Information", expanded=False):
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.subheader("Dataset Shape")
+            st.write(f"Rows: {df.shape[0]}")
+            st.write(f"Columns: {df.shape[1]}")
+            
+            st.markdown("---")
+            st.subheader("Data Types")
+            st.write(df.dtypes)
+        
+        with col2:
+            st.subheader("Missing Values Count")
+            missing = df.isnull().sum()
+            st.dataframe(missing)
+            
+            st.markdown("---")
+            st.subheader("Duplicate Rows")
+            st.write(f"Number of duplicates: {df.duplicated().sum()}")
+        
+        st.markdown("---")
+        st.subheader("First 5 Rows (Head)")
+        st.dataframe(df.head())
+        
+        st.markdown("---")
+        st.subheader("Last 5 Rows (Tail)")
+        st.dataframe(df.tail())
+        
+        st.markdown("---")
+        st.subheader("Summary Statistics")
+        st.dataframe(df.describe())
+    
+    # X and y data
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        with st.expander('X_Data (Features)'):
+            st.write('**X**')
+            X = df.drop('crop_yield', axis=1)
+            st.dataframe(X)
+            st.write(f"Shape: {X.shape}")
+    
+    with col2:
+        with st.expander('y_data (Target)'):
+            st.write('**y**')
+            y = df["crop_yield"]
+            st.dataframe(y)
+            st.write(f"Shape: {y.shape}")
 
-    st.subheader("Last 5 Rows (Tail)")
-    st.dataframe(df.tail())
-
-    st.markdown("---")
-
-    st.subheader("Data Types")
-    st.write(df.dtypes)
-
-    st.markdown("---")
-
-    st.subheader("Missing Values Count")
-    missing = df.isnull().sum()
-    st.dataframe(missing)
-
-    st.markdown("---")
-
-    st.subheader("Summary Statistics")
-    st.dataframe(df.describe())
-  
-with st.expander('X_Data'):
-  st.write('**X**')
-  X =df.drop('crop_yield', axis=1)
-  X
-
-
-with st.expander('y_data'):
-  st.write('**y**')
-  y = df["crop_yield"]
-  y
-st.header("Initial Data Visualization")
-st.subheader("Variable Distributions")
-
-with st.expander("View Histograms for All Variables"):
-
-    # Select numeric columns
-    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns
-
-    for col in numeric_cols:
-        st.subheader(f"Histogram: {col}")
-        fig, ax = plt.subplots()
-        sns.histplot(df[col], bins=30, kde=True, ax=ax)
+# ==================== DATA VISUALIZATION PAGE ====================
+elif page == "Data Visualization":
+    st.header("📈 Data Visualization")
+    
+    numeric_cols = df.select_dtypes(include=['int64', 'float64']).columns.tolist()
+    
+    # Distribution plots
+    st.subheader("Variable Distributions")
+    with st.expander("View Histograms for All Variables", expanded=True):
+        cols_per_row = 3
+        for i in range(0, len(numeric_cols), cols_per_row):
+            cols = st.columns(cols_per_row)
+            for j, col_name in enumerate(numeric_cols[i:i+cols_per_row]):
+                with cols[j]:
+                    fig, ax = plt.subplots(figsize=(5, 4))
+                    sns.histplot(df[col_name], bins=30, kde=True, ax=ax, color='skyblue')
+                    ax.set_title(f"{col_name}")
+                    ax.set_xlabel(col_name)
+                    ax.set_ylabel("Frequency")
+                    st.pyplot(fig)
+                    plt.close()
+    
+    # Correlation Heatmap
+    st.subheader("Correlation Analysis")
+    with st.expander("Correlation Heatmap", expanded=True):
+        fig, ax = plt.subplots(figsize=(10, 8))
+        correlation_matrix = df[numeric_cols].corr()
+        sns.heatmap(correlation_matrix, annot=True, cmap="coolwarm", ax=ax, 
+                    center=0, linewidths=1, fmt='.2f')
+        ax.set_title("Correlation Matrix Heatmap")
         st.pyplot(fig)
-      
-with st.expander("Correlation Heatmap"):
+        plt.close()
+    
+    # Box plots
+    st.subheader("Outlier Detection")
+    with st.expander("Box Plots for All Variables", expanded=False):
+        cols_per_row = 3
+        for i in range(0, len(numeric_cols), cols_per_row):
+            cols = st.columns(cols_per_row)
+            for j, col_name in enumerate(numeric_cols[i:i+cols_per_row]):
+                with cols[j]:
+                    fig, ax = plt.subplots(figsize=(5, 4))
+                    sns.boxplot(y=df[col_name], ax=ax, color='lightgreen')
+                    ax.set_title(f"{col_name}")
+                    st.pyplot(fig)
+                    plt.close()
+    
+    # Scatter plots
+    st.subheader("Feature vs Target Relationships")
+    with st.expander("Scatter Plots", expanded=False):
+        feature_cols = [col for col in numeric_cols if col != 'crop_yield']
+        cols_per_row = 3
+        for i in range(0, len(feature_cols), cols_per_row):
+            cols = st.columns(cols_per_row)
+            for j, col_name in enumerate(feature_cols[i:i+cols_per_row]):
+                with cols[j]:
+                    fig, ax = plt.subplots(figsize=(5, 4))
+                    ax.scatter(df[col_name], df['crop_yield'], alpha=0.5)
+                    ax.set_xlabel(col_name)
+                    ax.set_ylabel('crop_yield')
+                    ax.set_title(f"{col_name} vs Crop Yield")
+                    st.pyplot(fig)
+                    plt.close()
 
-    st.subheader("Correlation Matrix")
-
-    fig, ax = plt.subplots(figsize=(8,6))
-    sns.heatmap(df[numeric_cols].corr(), annot=True, cmap="coolwarm", ax=ax)
-    st.pyplot(fig)
-# Utility functions
-# -----------------------------
-@st.cache_data(show_spinner=False)
-def load_data_from_path(path: str) -> pd.DataFrame:
-    return pd.read_csv(path)
-
-@st.cache_data(show_spinner=False)
-def load_data_from_upload(uploaded_file) -> pd.DataFrame:
-    return pd.read_csv(uploaded_file)
-
-def rmse(y_true, y_pred) -> float:
-    return float(np.sqrt(mean_squared_error(y_true, y_pred)))
-
-def evaluate(y_true, y_pred) -> dict:
-    return {
-        "R2": float(r2_score(y_true, y_pred)),
-        "RMSE": rmse(y_true, y_pred),
-        "MAE": float(mean_absolute_error(y_true, y_pred))
-    }
-
-def corr_heatmap(df_num: pd.DataFrame):
-    corr = df_num.corr(numeric_only=True)
-    fig = px.imshow(
-        corr,
-        text_auto=True,
-        aspect="auto",
-        title="Correlation Heatmap (numeric columns)"
-    )
-    st.plotly_chart(fig, use_container_width=True)
-
-def pred_vs_actual_plot(y_true, y_pred, title):
-    fig = px.scatter(
-        x=y_true, y=y_pred,
-        labels={"x": "Actual Yield", "y": "Predicted Yield"},
-        title=title
-    )
-    minv = float(min(np.min(y_true), np.min(y_pred)))
-    maxv = float(max(np.max(y_true), np.max(y_pred)))
-    fig.add_shape(type="line", x0=minv, y0=minv, x1=maxv, y1=maxv)
-    st.plotly_chart(fig, use_container_width=True)
-
-def residuals_plot(y_true, y_pred, title):
-    res = y_true - y_pred
-    fig = px.scatter(
-        x=y_pred, y=res,
-        labels={"x": "Predicted Yield", "y": "Residual (Actual - Predicted)"},
-        title=title
-    )
-    fig.add_hline(y=0)
-    st.plotly_chart(fig, use_container_width=True)
-
-def feature_importance_bar(importances, feature_names, title):
-    imp_df = pd.DataFrame({"feature": feature_names, "importance": importances})
-    imp_df = imp_df.sort_values("importance", ascending=True)
-    fig = px.bar(imp_df, x="importance", y="feature", orientation="h", title=title)
-    st.plotly_chart(fig, use_container_width=True)
-
-def linear_coef_bar(coefs, feature_names, title):
-    coef_df = pd.DataFrame({"feature": feature_names, "coefficient": coefs})
-    coef_df = coef_df.sort_values("coefficient")
-    fig = px.bar(coef_df, x="coefficient", y="feature", orientation="h", title=title)
-    st.plotly_chart(fig, use_container_width=True)
-
-# -----------------------------
-# Sidebar: Data Source
-# -----------------------------
-st.sidebar.header("1) Data Source")
-
-uploaded = st.sidebar.file_uploader("Upload CSV (optional)", type=["csv"])
-use_repo_file = st.sidebar.checkbox(f"Use repo file: {DEFAULT_DATA_PATH}", value=True)
-
-df = None
-load_error = None
-
-try:
-    if uploaded is not None:
-        df = load_data_from_upload(uploaded)
-    elif use_repo_file:
-        df = load_data_from_path(DEFAULT_DATA_PATH)
-    else:
-        st.info("Upload a CSV file or enable 'Use repo file'.")
-        st.stop()
-except Exception as e:
-    load_error = str(e)
-
-if df is None:
-    st.error(f"Failed to load data: {load_error}")
-    st.stop()
-
-# -----------------------------
-# Sidebar: Target/Features
-# -----------------------------
-st.sidebar.header("2) Target & Features")
-
-if DEFAULT_TARGET in df.columns:
-    default_target_index = df.columns.tolist().index(DEFAULT_TARGET)
-else:
-    # fallback: use last column
-    default_target_index = len(df.columns) - 1
-
-target_col = st.sidebar.selectbox(
-    "Select target column (Yield)",
-    options=df.columns.tolist(),
-    index=default_target_index
-)
-
-# Numeric columns only (this dataset is numeric, but keep robust)
-numeric_cols = df.select_dtypes(include=[np.number]).columns.tolist()
-
-if target_col not in numeric_cols:
-    st.error("Target column must be numeric for regression.")
-    st.stop()
-
-default_features = [c for c in numeric_cols if c != target_col]
-feature_cols = st.sidebar.multiselect(
-    "Select feature columns",
-    options=numeric_cols,
-    default=default_features
-)
-
-if len(feature_cols) == 0:
-    st.warning("Select at least one feature column.")
-    st.stop()
-
-# -----------------------------
-# Sidebar: Modeling controls
-# -----------------------------
-st.sidebar.header("3) Training Settings")
-
-test_size = st.sidebar.slider("Test split size", 0.10, 0.40, 0.20, 0.05)
-random_state = st.sidebar.number_input("Random state", 0, 9999, 42, 1)
-
-st.sidebar.subheader("Decision Tree Hyperparameters")
-dt_max_depth = st.sidebar.slider("max_depth", 1, 30, 8)
-dt_min_samples_split = st.sidebar.slider("min_samples_split", 2, 30, 2)
-dt_min_samples_leaf = st.sidebar.slider("min_samples_leaf", 1, 30, 1)
-
-use_rf = st.sidebar.checkbox("Also train Random Forest (advanced)", value=True)
-rf_estimators = st.sidebar.slider("RF n_estimators", 50, 500, 200, 50) if use_rf else 0
-rf_max_depth = st.sidebar.slider("RF max_depth", 2, 50, 15) if use_rf else None
-
-do_cv = st.sidebar.checkbox("Add 5-fold cross validation (R²)", value=True)
-
-# -----------------------------
-# Tabs
-# -----------------------------
-tab_data, tab_eda, tab_train, tab_predict = st.tabs(
-    ["📄 Data", "📊 EDA & Visualizations", "🧠 Train & Evaluate", "🧮 Predict"]
-)
-
-# -----------------------------
-# Tab 1: Data
-# -----------------------------
-with tab_data:
-    st.subheader("Dataset Preview")
-    st.write(f"Rows: **{df.shape[0]}**, Columns: **{df.shape[1]}**")
-    st.dataframe(df.head(25), use_container_width=True)
-
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown("### Data types")
-        st.write(df.dtypes.astype(str))
-    with c2:
-        st.markdown("### Missing values")
-        st.write(df.isna().sum())
-    with c3:
-        st.markdown("### Summary (selected)")
-        st.write(df[feature_cols + [target_col]].describe())
-
-    # Download selected subset
-    subset = df[feature_cols + [target_col]].dropna().copy()
-    st.download_button(
-        "⬇️ Download selected clean data (CSV)",
-        data=subset.to_csv(index=False).encode("utf-8"),
-        file_name="crop_yield_selected_clean.csv",
-        mime="text/csv"
-    )
-
-# -----------------------------
-# Tab 2: EDA
-# -----------------------------
-with tab_eda:
-    st.subheader("Exploratory Data Analysis (EDA)")
-
-    work = df[feature_cols + [target_col]].copy()
-
-    # Column chooser
-    col_for_dist = st.selectbox("Pick a column for distribution plots", options=feature_cols + [target_col])
-
-    c1, c2 = st.columns(2)
-    with c1:
-        fig_hist = px.histogram(work, x=col_for_dist, nbins=30, title=f"Histogram: {col_for_dist}")
-        st.plotly_chart(fig_hist, use_container_width=True)
-
-    with c2:
-        fig_box = px.box(work, y=col_for_dist, title=f"Boxplot: {col_for_dist}")
-        st.plotly_chart(fig_box, use_container_width=True)
-
-    st.markdown("### Feature vs Target Relationship")
-    x_feat = st.selectbox("Choose feature (x-axis)", options=feature_cols)
-    fig_sc = px.scatter(
-        work,
-        x=x_feat,
-        y=target_col,
-        title=f"{x_feat} vs {target_col}"
-    )
-    st.plotly_chart(fig_sc, use_container_width=True)
-
-    st.markdown("### Pairwise Scatter (sampled for speed)")
-    sample_n = min(500, len(work.dropna()))
-    sampled = work.dropna().sample(sample_n, random_state=int(random_state))
-    fig_matrix = px.scatter_matrix(
-        sampled,
-        dimensions=feature_cols + [target_col],
-        title="Scatter Matrix (sampled)"
-    )
-    st.plotly_chart(fig_matrix, use_container_width=True)
-
-    st.markdown("### Correlation Heatmap")
-    corr_heatmap(work.dropna())
-
-# -----------------------------
-# Tab 3: Train & Evaluate
-# -----------------------------
-with tab_train:
-    st.subheader("Train Models + Evaluate + Compare")
-
-    # Prepare clean data
-    data = df[feature_cols + [target_col]].dropna().copy()
-    X = data[feature_cols]
-    y = data[target_col]
-
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y,
-        test_size=float(test_size),
-        random_state=int(random_state)
-    )
-
-    # Models
-    lr = Pipeline([("scaler", StandardScaler()), ("model", LinearRegression())])
-
-    dt = DecisionTreeRegressor(
-        max_depth=int(dt_max_depth),
-        min_samples_split=int(dt_min_samples_split),
-        min_samples_leaf=int(dt_min_samples_leaf),
-        random_state=int(random_state)
-    )
-
-    rf = None
-    if use_rf:
-        rf = RandomForestRegressor(
-            n_estimators=int(rf_estimators),
-            max_depth=int(rf_max_depth),
-            random_state=int(random_state),
-            n_jobs=-1
+# ==================== MODEL TRAINING PAGE ====================
+elif page == "Model Training":
+    st.header("🤖 Model Training")
+    
+    # Prepare data
+    X = df.drop('crop_yield', axis=1)
+    y = df['crop_yield']
+    
+    # Training configuration
+    st.subheader("Training Configuration")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        test_size = st.slider("Test Set Size (%)", 10, 40, 20, 5)
+        random_state = st.number_input("Random State", 0, 100, 42)
+    
+    with col2:
+        model_choice = st.selectbox(
+            "Select Model",
+            ["Random Forest", "Linear Regression", "Decision Tree"]
         )
+    
+    # Model-specific parameters
+    if model_choice == "Random Forest":
+        col1, col2 = st.columns(2)
+        with col1:
+            n_estimators = st.slider("Number of Trees", 10, 200, 100, 10)
+        with col2:
+            max_depth = st.slider("Max Depth", 3, 30, 10, 1)
+    
+    # Train button
+    if st.button("Train Model", type="primary"):
+        with st.spinner("Training model..."):
+            # Split data
+            X_train, X_test, y_train, y_test = train_test_split(
+                X, y, test_size=test_size/100, random_state=random_state
+            )
+            
+            # Initialize model
+            if model_choice == "Random Forest":
+                model = RandomForestRegressor(
+                    n_estimators=n_estimators, 
+                    max_depth=max_depth, 
+                    random_state=random_state
+                )
+            elif model_choice == "Linear Regression":
+                model = LinearRegression()
+            else:  # Decision Tree
+                model = DecisionTreeRegressor(random_state=random_state)
+            
+            # Train model
+            model.fit(X_train, y_train)
+            
+            # Make predictions
+            y_train_pred = model.predict(X_train)
+            y_test_pred = model.predict(X_test)
+            
+            # Calculate metrics
+            train_mse = mean_squared_error(y_train, y_train_pred)
+            test_mse = mean_squared_error(y_test, y_test_pred)
+            train_r2 = r2_score(y_train, y_train_pred)
+            test_r2 = r2_score(y_test, y_test_pred)
+            train_mae = mean_absolute_error(y_train, y_train_pred)
+            test_mae = mean_absolute_error(y_test, y_test_pred)
+            
+            # Store in session state
+            st.session_state['model'] = model
+            st.session_state['X_train'] = X_train
+            st.session_state['X_test'] = X_test
+            st.session_state['y_train'] = y_train
+            st.session_state['y_test'] = y_test
+            st.session_state['y_train_pred'] = y_train_pred
+            st.session_state['y_test_pred'] = y_test_pred
+            st.session_state['feature_names'] = X.columns.tolist()
+            
+            st.success("✅ Model trained successfully!")
+            
+            # Display metrics
+            st.subheader("Training Results")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric("Training R² Score", f"{train_r2:.4f}")
+                st.metric("Training MSE", f"{train_mse:.4f}")
+                st.metric("Training MAE", f"{train_mae:.4f}")
+            
+            with col2:
+                st.metric("Test R² Score", f"{test_r2:.4f}")
+                st.metric("Test MSE", f"{test_mse:.4f}")
+                st.metric("Test MAE", f"{test_mae:.4f}")
+            
+            with col3:
+                st.metric("Training RMSE", f"{np.sqrt(train_mse):.4f}")
+                st.metric("Test RMSE", f"{np.sqrt(test_mse):.4f}")
+                
+                # Overfitting indicator
+                r2_diff = train_r2 - test_r2
+                if r2_diff > 0.1:
+                    st.warning("⚠️ Possible overfitting detected")
+                else:
+                    st.success("✅ Good generalization")
+            
+            # Feature importance (for tree-based models)
+            if model_choice in ["Random Forest", "Decision Tree"]:
+                st.subheader("Feature Importance")
+                feature_importance = pd.DataFrame({
+                    'Feature': X.columns,
+                    'Importance': model.feature_importances_
+                }).sort_values('Importance', ascending=False)
+                
+                fig, ax = plt.subplots(figsize=(10, 6))
+                sns.barplot(data=feature_importance, x='Importance', y='Feature', ax=ax)
+                ax.set_title("Feature Importance")
+                st.pyplot(fig)
+                plt.close()
 
-    if st.button("🚀 Train Models", type="primary"):
-        with st.spinner("Training..."):
-            # Train LR
-            lr.fit(X_train, y_train)
-            lr_pred = lr.predict(X_test)
-            lr_metrics = evaluate(y_test, lr_pred)
-
-            # Train DT
-            dt.fit(X_train, y_train)
-            dt_pred = dt.predict(X_test)
-            dt_metrics = evaluate(y_test, dt_pred)
-
-            results = [
-                {"Model": "Linear Regression", **lr_metrics},
-                {"Model": "Decision Tree", **dt_metrics},
-            ]
-
-            preds = {
-                "Linear Regression": lr_pred,
-                "Decision Tree": dt_pred
-            }
-
-            models = {
-                "Linear Regression": lr,
-                "Decision Tree": dt
-            }
-
-            # Train RF
-            if rf is not None:
-                rf.fit(X_train, y_train)
-                rf_pred = rf.predict(X_test)
-                rf_metrics = evaluate(y_test, rf_pred)
-                results.append({"Model": "Random Forest", **rf_metrics})
-                preds["Random Forest"] = rf_pred
-                models["Random Forest"] = rf
-
-            results_df = pd.DataFrame(results).sort_values("R2", ascending=False).reset_index(drop=True)
-
-            # Optional CV
-            if do_cv:
-                kf = KFold(n_splits=5, shuffle=True, random_state=int(random_state))
-                results_df["CV_R2_Mean"] = np.nan
-
-                lr_cv = cross_val_score(lr, X, y, cv=kf, scoring="r2").mean()
-                dt_cv = cross_val_score(dt, X, y, cv=kf, scoring="r2").mean()
-
-                results_df.loc[results_df["Model"] == "Linear Regression", "CV_R2_Mean"] = float(lr_cv)
-                results_df.loc[results_df["Model"] == "Decision Tree", "CV_R2_Mean"] = float(dt_cv)
-
-                if rf is not None:
-                    rf_cv = cross_val_score(rf, X, y, cv=kf, scoring="r2").mean()
-                    results_df.loc[results_df["Model"] == "Random Forest", "CV_R2_Mean"] = float(rf_cv)
-
-            best_model_name = results_df.loc[0, "Model"]
-            best_model = models[best_model_name]
-
-            # Store in session
-            st.session_state["models"] = models
-            st.session_state["preds"] = preds
-            st.session_state["results_df"] = results_df
-            st.session_state["best_model_name"] = best_model_name
-            st.session_state["best_model"] = best_model
-            st.session_state["X_test"] = X_test
-            st.session_state["y_test"] = y_test
-
-        st.success(f"Training complete ✅ Best model: **{best_model_name}**")
-
-    # Display results if trained
-    if "results_df" in st.session_state:
-        st.markdown("### Model Performance Comparison")
-        st.dataframe(st.session_state["results_df"], use_container_width=True)
-
-        fig_r2 = px.bar(st.session_state["results_df"], x="Model", y="R2", title="R² Score Comparison (higher is better)")
-        st.plotly_chart(fig_r2, use_container_width=True)
-
-        st.markdown("### Model Diagnostics")
-        model_choice = st.selectbox("Choose model for plots", options=list(st.session_state["preds"].keys()))
-        y_true = st.session_state["y_test"]
-        y_pred = st.session_state["preds"][model_choice]
-
-        c1, c2 = st.columns(2)
-        with c1:
-            pred_vs_actual_plot(y_true, y_pred, f"{model_choice}: Predicted vs Actual")
-        with c2:
-            residuals_plot(y_true, y_pred, f"{model_choice}: Residuals (Actual - Predicted)")
-
-        st.markdown("### Model Interpretation")
-        chosen_model = st.session_state["models"][model_choice]
-
-        if model_choice == "Linear Regression":
-            # pipeline: scaler + model
-            lr_model = chosen_model.named_steps["model"]
-            linear_coef_bar(lr_model.coef_, feature_cols, "Linear Regression Coefficients")
-        else:
-            if hasattr(chosen_model, "feature_importances_"):
-                feature_importance_bar(chosen_model.feature_importances_, feature_cols, f"{model_choice} Feature Importance")
-
-        st.markdown("### Export Best Model")
-        best_name = st.session_state["best_model_name"]
-        best_model = st.session_state["best_model"]
-
-        bundle = {
-            "model_name": best_name,
-            "model": best_model,
-            "features": feature_cols,
-            "target": target_col
-        }
-
-        buf = io.BytesIO()
-        joblib.dump(bundle, buf)
+# ==================== MODEL EVALUATION PAGE ====================
+elif page == "Model Evaluation":
+    st.header("📊 Model Evaluation")
+    
+    if 'model' not in st.session_state:
+        st.warning("⚠️ Please train a model first on the 'Model Training' page.")
+    else:
+        model = st.session_state['model']
+        X_test = st.session_state['X_test']
+        y_test = st.session_state['y_test']
+        y_train = st.session_state['y_train']
+        y_train_pred = st.session_state['y_train_pred']
+        y_test_pred = st.session_state['y_test_pred']
+        
+        # Metrics
+        st.subheader("Performance Metrics")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.write("**Training Set**")
+            train_metrics = pd.DataFrame({
+                'Metric': ['R² Score', 'MSE', 'RMSE', 'MAE'],
+                'Value': [
+                    r2_score(y_train, y_train_pred),
+                    mean_squared_error(y_train, y_train_pred),
+                    np.sqrt(mean_squared_error(y_train, y_train_pred)),
+                    mean_absolute_error(y_train, y_train_pred)
+                ]
+            })
+            st.dataframe(train_metrics, use_container_width=True)
+        
+        with col2:
+            st.write("**Test Set**")
+            test_metrics = pd.DataFrame({
+                'Metric': ['R² Score', 'MSE', 'RMSE', 'MAE'],
+                'Value': [
+                    r2_score(y_test, y_test_pred),
+                    mean_squared_error(y_test, y_test_pred),
+                    np.sqrt(mean_squared_error(y_test, y_test_pred)),
+                    mean_absolute_error(y_test, y_test_pred)
+                ]
+            })
+            st.dataframe(test_metrics, use_container_width=True)
+        
+        # Visualization
+        st.subheader("Prediction Visualizations")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            # Actual vs Predicted scatter plot
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.scatter(y_test, y_test_pred, alpha=0.6, edgecolors='k')
+            ax.plot([y_test.min(), y_test.max()], 
+                   [y_test.min(), y_test.max()], 
+                   'r--', lw=2, label='Perfect Prediction')
+            ax.set_xlabel('Actual Crop Yield')
+            ax.set_ylabel('Predicted Crop Yield')
+            ax.set_title('Actual vs Predicted (Test Set)')
+            ax.legend()
+            ax.grid(True, alpha=0.3)
+            st.pyplot(fig)
+            plt.close()
+        
+        with col2:
+            # Residual plot
+            residuals = y_test - y_test_pred
+            fig, ax = plt.subplots(figsize=(8, 6))
+            ax.scatter(y_test_pred, residuals, alpha=0.6, edgecolors='k')
+            ax.axhline(y=0, color='r', linestyle='--', lw=2)
+            ax.set_xlabel('Predicted Crop Yield')
+            ax.set_ylabel('Residuals')
+            ax.set_title('Residual Plot (Test Set)')
+            ax.grid(True, alpha=0.3)
+            st.pyplot(fig)
+            plt.close()
+        
+        # Distribution comparison
+        st.subheader("Distribution Comparison")
+        fig, ax = plt.subplots(figsize=(12, 5))
+        ax.hist(y_test, bins=30, alpha=0.5, label='Actual', color='blue')
+        ax.hist(y_test_pred, bins=30, alpha=0.5, label='Predicted', color='orange')
+        ax.set_xlabel('Crop Yield')
+        ax.set_ylabel('Frequency')
+        ax.set_title('Distribution: Actual vs Predicted')
+        ax.legend()
+        st.pyplot(fig)
+        plt.close()
+        
+        # Error distribution
+        st.subheader("Error Analysis")
+        fig, ax = plt.subplots(figsize=(12, 5))
+        ax.hist(residuals, bins=30, edgecolor='black', alpha=0.7)
+        ax.set_xlabel('Prediction Error')
+        ax.set_ylabel('Frequency')
+        ax.set_title('Distribution of Prediction Errors')
+        ax.axvline(x=0, color='r', linestyle='--', lw=2)
+        st.pyplot(fig)
+        plt.close()
+        
+        # Download model
+        st.subheader("Download Model")
+        model_bytes = pickle.dumps(model)
         st.download_button(
-            f"⬇️ Download Best Model ({best_name})",
-            data=buf.getvalue(),
-            file_name="best_crop_yield_model.joblib",
+            label="Download Trained Model",
+            data=model_bytes,
+            file_name="crop_yield_model.pkl",
             mime="application/octet-stream"
         )
+
+# ==================== MAKE PREDICTIONS PAGE ====================
+elif page == "Make Predictions":
+    st.header("🔮 Make Predictions")
+    
+    if 'model' not in st.session_state:
+        st.warning("⚠️ Please train a model first on the 'Model Training' page.")
     else:
-        st.info("Click **Train Models** to see evaluation tables and model visualizations.")
+        model = st.session_state['model']
+        feature_names = st.session_state['feature_names']
+        
+        # Prediction method selection
+        prediction_method = st.radio(
+            "Choose prediction method:",
+            ["Manual Input", "Upload CSV File"]
+        )
+        
+        if prediction_method == "Manual Input":
+            st.subheader("Enter Feature Values")
+            st.write("Please enter the values for each feature:")
+            
+            # Create input fields based on feature names
+            input_data = {}
+            
+            # Create columns for better layout
+            col1, col2, col3 = st.columns(3)
+            
+            for idx, feature in enumerate(feature_names):
+                # Get some statistics from the original data for helpful hints
+                feature_mean = df[feature].mean()
+                feature_min = df[feature].min()
+                feature_max = df[feature].max()
+                
+                with [col1, col2, col3][idx % 3]:
+                    input_data[feature] = st.number_input(
+                        f"{feature}",
+                        value=float(feature_mean),
+                        min_value=float(feature_min),
+                        max_value=float(feature_max),
+                        help=f"Range: {feature_min:.2f} - {feature_max:.2f}, Mean: {feature_mean:.2f}"
+                    )
+            
+            if st.button("Predict Crop Yield", type="primary"):
+                # Create DataFrame with input data
+                input_df = pd.DataFrame([input_data])
+                
+                # Make prediction
+                prediction = model.predict(input_df)[0]
+                
+                # Display result
+                st.success(f"### Predicted Crop Yield: **{prediction:.2f}**")
+                
+                # Show input summary
+                with st.expander("View Input Summary"):
+                    st.dataframe(input_df.T.rename(columns={0: 'Value'}))
+        
+        else:  # Upload CSV File
+            st.subheader("Upload CSV File for Batch Predictions")
+            st.write("Upload a CSV file with the same features as the training data.")
+            
+            # Show expected format
+            with st.expander("View Expected CSV Format"):
+                st.write("Your CSV should have the following columns:")
+                st.code(", ".join(feature_names))
+                
+                # Show sample
+                sample_df = df[feature_names].head(3)
+                st.write("Example:")
+                st.dataframe(sample_df)
+            
+            uploaded_file = st.file_uploader("Choose a CSV file", type=['csv'])
+            
+            if uploaded_file is not None:
+                try:
+                    # Read uploaded file
+                    upload_df = pd.read_csv(uploaded_file)
+                    
+                    st.write("**Uploaded Data:**")
+                    st.dataframe(upload_df)
+                    
+                    # Check if all required columns are present
+                    missing_cols = set(feature_names) - set(upload_df.columns)
+                    extra_cols = set(upload_df.columns) - set(feature_names)
+                    
+                    if missing_cols:
+                        st.error(f"Missing columns: {', '.join(missing_cols)}")
+                    else:
+                        # Select only the required columns in the correct order
+                        upload_df_features = upload_df[feature_names]
+                        
+                        if st.button("Generate Predictions", type="primary"):
+                            # Make predictions
+                            predictions = model.predict(upload_df_features)
+                            
+                            # Add predictions to dataframe
+                            result_df = upload_df.copy()
+                            result_df['Predicted_Crop_Yield'] = predictions
+                            
+                            st.success("✅ Predictions generated successfully!")
+                            
+                            # Display results
+                            st.subheader("Prediction Results")
+                            st.dataframe(result_df)
+                            
+                            # Summary statistics
+                            col1, col2, col3 = st.columns(3)
+                            with col1:
+                                st.metric("Mean Predicted Yield", f"{predictions.mean():.2f}")
+                            with col2:
+                                st.metric("Min Predicted Yield", f"{predictions.min():.2f}")
+                            with col3:
+                                st.metric("Max Predicted Yield", f"{predictions.max():.2f}")
+                            
+                            # Visualization
+                            st.subheader("Prediction Distribution")
+                            fig, ax = plt.subplots(figsize=(10, 5))
+                            ax.hist(predictions, bins=30, edgecolor='black', alpha=0.7)
+                            ax.set_xlabel('Predicted Crop Yield')
+                            ax.set_ylabel('Frequency')
+                            ax.set_title('Distribution of Predicted Crop Yields')
+                            st.pyplot(fig)
+                            plt.close()
+                            
+                            # Download results
+                            csv = result_df.to_csv(index=False)
+                            st.download_button(
+                                label="Download Predictions as CSV",
+                                data=csv,
+                                file_name="crop_yield_predictions.csv",
+                                mime="text/csv"
+                            )
+                
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
 
-# -----------------------------
-# Tab 4: Predict
-# -----------------------------
-with tab_predict:
-    st.subheader("Interactive Prediction")
-
-    st.write("Provide values for each feature and predict crop yield using the **best trained model**.")
-
-    if "best_model" not in st.session_state:
-        st.warning("Train models first in the **Train & Evaluate** tab.")
-    else:
-        # Build input form from feature ranges
-        inputs = {}
-        cols = st.columns(3)
-
-        for i, col in enumerate(feature_cols):
-            with cols[i % 3]:
-                col_min = float(df[col].min())
-                col_max = float(df[col].max())
-                col_mean = float(df[col].mean())
-                inputs[col] = st.number_input(
-                    f"{col}",
-                    min_value=col_min,
-                    max_value=col_max,
-                    value=col_mean
-                )
-
-        if st.button("🌾 Predict Yield", type="primary"):
-            X_in = pd.DataFrame([inputs], columns=feature_cols)
-            model = st.session_state["best_model"]
-            model_name = st.session_state["best_model_name"]
-
-            pred = float(model.predict(X_in)[0])
-            st.success(f"Predicted **{target_col}**: **{pred:.2f}**  (Model: **{model_name}**)")
-
-        st.caption("Tip: For Streamlit Cloud deployment, keep `crop_yield_data.csv` inside your GitHub repo.")
+# Footer
+st.sidebar.markdown("---")
+st.sidebar.info("""
+**App Features:**
+- Data exploration and visualization
+- Multiple ML models
+- Model evaluation metrics
+- Manual and batch predictions
+""")
