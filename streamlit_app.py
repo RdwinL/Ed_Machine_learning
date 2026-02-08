@@ -6,6 +6,8 @@ import matplotlib.pyplot as plt
 st.title('Machine Learning App')
 
 st.info('Machine learning model For Crop Yield Prediction')
+DEFAULT_DATA_PATH = "crop_yield_data.csv"
+DEFAULT_TARGET = "crop_yield"
 DATA_URL = "https://raw.githubusercontent.com/RdwinL/Ed_Machine_learning/refs/heads/master/crop_yield_data.csv"
 with st.expander('Raw Data'):
   st.write('**Raw data**')
